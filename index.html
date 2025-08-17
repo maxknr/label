@@ -396,14 +396,14 @@
                     console.warn(`Label ${i} has a 'To' address but no 'From' address. Skipping.`);
                     // Alert only if 'To' is present but 'From' is missing for any label
                     // This alert will not block the generation of other labels or the print/pdf functions.
-                    alert(`Warning: Label ${i} has a 'To' address but no 'From' address. It will not be generated.`);
+                    // Removed the alert here, as requested, to avoid pop-ups on load/generation of incomplete labels.
                 }
                 // If only commonFromAddress is present and no toAddress, it's fine, we just don't generate that label.
             }
 
             if (labelsGenerated === 0) {
                 labelsContainer.style.display = 'none'; // Hide if no labels were generated
-                alert('No complete labels were entered. Please ensure you have a "From" address and at least one "To" address filled.');
+                // Removed the alert here, as requested, to avoid pop-ups on load/generation of no labels.
             }
 
             // After generating labels, remember the single 'From' address if checkbox is checked
@@ -426,7 +426,8 @@
                 window.print();
             } else {
                 console.log('No labels to print after generation. Print dialog will not open.');
-                // The alert would have already been shown by generateLabels() if needed.
+                // The alert about no labels to print is kept here, as it's a direct user action.
+                alert("No labels were found to print. Please ensure you have entered complete 'From' and 'To' addresses for at least one label.");
             }
         }
 
