@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipping Label Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Lighter background */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        /* Gradient for the header */
+        .header-gradient {
+            background-image: linear-gradient(to right, #4c51bf, #667eea); /* Indigo gradient */
+        }
+
+        /* A4 paper dimensions for print preview (approx. 210mm x 297mm at 96dpi) */
+        .a4-sheet {
+            width: 210mm; /* A4 width */
+            min-height: 297mm; /* A4 height, min to allow growth if labels exceed standard layout */
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); /* Stronger shadow */
+            background-color: white;
+            padding: 15mm; /* Consistent padding for all sides */
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Two columns */
+            gap: 8mm 10mm; /* Adjusted gap to fit 4 rows per page (vertical-gap horizontal-gap) */
+            align-items: start;
+            justify-items: start;
+            margin-top: 2rem;
+            display: none; /* Hidden by default */
+            border-radius: 0.75rem; /* Rounded corners for the A4 sheet preview */
+        }
+
+        /* Outer wrapper for the dashed cut line and overall label sizing */
+        .label-cut-line-wrapper {
+            width: 85mm; /* This defines the full size of the label slot */
+            height: 60mm;
+            border: 1px dashed #9ca3af; /* Softer dashed line color */
+            box-sizing: border-box; /* Include border in width/height */
+            padding: 1mm; /* Space between dashed line and solid border */
+            display: flex; /* Use flexbox to center/fill label-card inside */
+            justify-content: center;
+            align-items: center;
+            background-color: transparent; /* Ensure transparent background around the label */
+        }
+
+        /* Inner card for the solid label border and content */
+        .label-card {
+            border: 2px solid #333; /* The solid inner border */
+            padding: 0.5rem; /* Padding internal to the label content */
+            width: 100%; /* Fill the space provided by the wrapper's padding */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            overflow: hidden; /* Hide overflow content if text is too long */
+            font-size: 0.85rem;
+            line-height: 1.2;
+            box-sizing: border-box;
+            background-color: white; /* Ensure inner part is white */
+        }
+
+        .label-content-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start; /* Align content to the top */
+            margin-bottom: 0.5rem;
+        }
+
+        .label-section {
+            flex: 1; /* Each section takes equal width */
+            padding-right: 0.5rem; /* Spacing between from and to */
+        }
+
+        .label-section:last-child {
+            padding-right: 0;
+            padding-left: 0.5rem; /* Spacing between from and to */
+        }
+
+        .label-header {
+            font-weight: 700; /* Made even bolder */
+            margin-bottom: 0.2rem;
+            color: #1f2937; /* Darker color for better contrast */
+        }
+
+        .from-address, .to-address {
+            white-space: pre-wrap; /* Preserves line breaks */
+            font-weight: 500; /* Address text itself can be slightly bolder too */
+        }
+
+        /* Styles for the textarea to make borders more visible */
+        textarea {
+            border-color: #9ca3af !important; /* Default border color for better visibility */
+        }
+        textarea:focus {
+            border-color: #4c51bf !important; /* Focus border color */
+            box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.3) !important; /* Stronger focus ring */
+        }
+
+        /* Print-specific styles */
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+                margin: 0;
+                display: block; /* Override flexbox for printing */
+            }
+
+            .main-content, .header, .footer-description { /* Hide footer description during print */
+                display: none !important; /* Hide everything except the print area */
+            }
+
+            .a4-sheet {
+                display: grid !important; /* Ensure it's displayed */
+                width: 210mm;
+                height: 297mm;
+                box-shadow: none;
+                margin: 0;
+                padding: 15mm !important; /* Consistent padding for print */
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8mm 10mm;
+                align-items: start;
+                justify-items: start;
+                border-radius: 0; /* No rounded corners on print */
+            }
+
+            .label-cut-line-wrapper {
+                border: 1px dashed #000; /* Black dashed cut line for print */
+                padding: 1mm !important; /* Ensure consistent padding in print */
+            }
+            .label-card {
+                border: 1px solid #000; /* Solid black border for print */
+                padding: 0.5rem !important; /* Ensure consistent padding in print */
+            }
+            .label-header {
+                font-weight: 700; /* Maintain bold for print */
+                color: #000;
+            }
+             /* Add page breaks for every 8 labels in print */
+            .label-cut-line-wrapper:nth-child(8n) {
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body class="selection:bg-indigo-200">
+    <div class="header header-gradient w-full text-center py-6 text-white shadow-lg">
+        <h1 class="text-3xl font-bold">📦 Shipping Label Generator</h1>
+    </div>
+
+    <div class="main-content bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl mt-8">
+        <h2 class="text-2xl font-semibold mb-6 text-gray-800">Create Your Labels</h2>
+
+        <p class="mb-6 text-gray-700 leading-relaxed">
+            Welcome to the free Shipping Label Generator! Easily create custom shipping labels without any login.
+            Just enter your "From" address once, and then add up to eight recipient "To" addresses.
+            You'll get a professional-looking sheet of labels with clear cut lines, ready to print or download as a PDF.
+            Plus, you can save your "From" address for quick access next time!
+        </p>
+
+        <div id="label-inputs-container" class="space-y-6 mb-8">
+            <!-- Single From Address Block - with new background color and border -->
+            <div class="label-input-block p-4 border border-indigo-200 rounded-lg bg-blue-100 shadow-sm">
+                <h3 class="text-lg font-medium mb-3 text-gray-700">Your "From" Address</h3>
+                <div>
+                    <label for="fromAddress" class="block text-sm font-medium text-gray-700">From Address (applies to all labels)</label>
+                    <textarea id="fromAddress" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Your Name&#10;Your Street&#10;City, State ZIP"></textarea>
+                </div>
+            </div>
+
+            <!-- To Address Blocks (arranged in two columns) -->
+            <div class="label-input-block p-4 border border-gray-200 rounded-lg bg-gray-50 shadow-sm">
+                <h3 class="text-lg font-medium mb-3 text-gray-700">Recipient "To" Addresses</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Label 1 -->
+                    <div>
+                        <label for="toAddress1" class="block text-sm font-medium text-gray-700">Label 1: To Address</label>
+                        <textarea id="toAddress1" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 2 -->
+                    <div>
+                        <label for="toAddress2" class="block text-sm font-medium text-gray-700">Label 2: To Address</label>
+                        <textarea id="toAddress2" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 3 -->
+                    <div>
+                        <label for="toAddress3" class="block text-sm font-medium text-gray-700">Label 3: To Address</label>
+                        <textarea id="toAddress3" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 4 -->
+                    <div>
+                        <label for="toAddress4" class="block text-sm font-medium text-gray-700">Label 4: To Address</label>
+                        <textarea id="toAddress4" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 5 -->
+                    <div>
+                        <label for="toAddress5" class="block text-sm font-medium text-gray-700">Label 5: To Address</label>
+                        <textarea id="toAddress5" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 6 -->
+                    <div>
+                        <label for="toAddress6" class="block text-sm font-medium text-gray-700">Label 6: To Address</label>
+                        <textarea id="toAddress6" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 7 -->
+                    <div>
+                        <label for="toAddress7" class="block text-sm font-medium text-gray-700">Label 7: To Address</label>
+                        <textarea id="toAddress7" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+
+                    <!-- Label 8 -->
+                    <div>
+                        <label for="toAddress8" class="block text-sm font-medium text-gray-700">Label 8: To Address</label>
+                        <textarea id="toAddress8" rows="3" class="mt-1 block w-full rounded-md border-2 border-gray-400 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Recipient Name&#10;Recipient Street&#10;City, State ZIP"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center mb-6">
+            <input id="rememberFrom" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+            <label for="rememberFrom" class="ml-2 block text-sm text-gray-900">Remember "From" address for future use</label>
+        </div>
+
+        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+            <button onclick="generateLabels()" class="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                Generate Labels
+            </button>
+            <button onclick="printLabels()" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                Print Labels
+            </button>
+            <button onclick="downloadPdf()" class="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                Download PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Area for generated labels (A4 sheet preview) -->
+    <div id="labels-a4-sheet" class="a4-sheet">
+        <!-- Labels will be inserted here by JavaScript -->
+    </div>
+
+    <div class="footer-description w-full max-w-4xl mt-8 p-8 bg-white rounded-xl shadow-lg text-gray-700 leading-relaxed">
+        <h2 class="text-2xl font-semibold mb-4 text-gray-800">How to Use This Shipping Label Generator</h2>
+        <p class="mb-4">
+            Our **free online shipping label generator** is designed for simplicity and efficiency. Here's a quick guide to getting your labels ready:
+        </p>
+        <ol class="list-decimal list-inside space-y-2 mb-6">
+            <li>
+                <strong>Enter Your "From" Address:</strong> Start by filling out your sender address in the designated "Your 'From' Address" section. This address will automatically populate for all the labels you generate, saving you repetitive typing.
+            </li>
+            <li>
+                <strong>Add Recipient "To" Addresses:</strong> Next, proceed to the "Recipient 'To' Addresses" section. You can enter up to eight different recipient addresses. For each label you need, simply fill in the corresponding "To Address" field. If a "To" address field is left blank, a label for that slot will not be generated.
+            </li>
+            <li>
+                <strong>Copy and Paste Addresses:</strong> For faster entry, you can easily **copy and paste full addresses** into any of the text fields. Ensure each line of the address is correctly formatted in the input box to appear properly on the label.
+            </li>
+            <li>
+                <strong>Remember Your "From" Address:</strong> Check the "Remember 'From' address for future use" box if you want your sender address to be saved in your browser's local storage for your next visit. This is convenient for regular users.
+            </li>
+            <li>
+                <strong>Generate Labels:</strong> The labels on the A4 preview sheet are automatically generated as you type. If you prefer, you can click the **"Generate Labels"** button to manually refresh the preview based on your inputs.
+            </li>
+            <li>
+                <strong>Print Labels Directly:</strong> Click the **"Print Labels"** button to open your browser's print dialogue. This allows you to print the generated labels directly onto an A4 sheet. Our layout is optimized to fit eight labels per page, with clear cut lines for easy separation.
+            </li>
+            <li>
+                <strong>Download as PDF:</strong> If you prefer to save your labels digitally or print them later, click the **"Download PDF"** button. A PDF file containing all your generated labels (eight labels per A4 page) will be created and downloaded to your device, complete with cut lines.
+            </li>
+        </ol>
+
+        <h2 class="text-2xl font-semibold mb-4 text-gray-800">Usefulness for Small Businesses</h2>
+        <p class="mb-4">
+            This **no-login-needed shipping label generator** is an invaluable tool for small businesses, Etsy sellers, e-commerce startups, and anyone who frequently ships packages. Here's why it's a game-changer:
+        </p>
+        <ul class="list-disc list-inside space-y-2 mb-6">
+            <li>
+                <strong>Cost-Effective:</strong> Eliminate the need for expensive label printing software or specialized label sheets. Use standard A4 paper and print exactly what you need, when you need it, for **free**.
+            </li>
+            <li>
+                <strong>Time-Saving:</strong> The single "From" address entry significantly speeds up the process for multiple shipments. Rapidly generate batches of labels instead of handwriting them or re-entering your details repeatedly.
+            </li>
+            <li>
+                <strong>Professional Appearance:</strong> Present a polished and professional image to your customers with clear, machine-printed labels. This enhances your brand's credibility and customer satisfaction.
+            </li>
+            <li>
+                <strong>No Account Required:</strong> Unlike many online tools, our generator requires **no registration or login**. This means instant access, no data collection, and zero commitment, making it ideal for quick, one-off tasks or for users who value privacy.
+            </li>
+            <li>
+                <strong>Efficient Use of Paper:</strong> By fitting eight labels perfectly onto a single A4 sheet, you maximize paper usage and minimize waste, contributing to both cost savings and environmental responsibility.
+            </li>
+            <li>
+                <strong>Clear Cut Lines:</strong> The included dashed cut lines ensure that each label can be neatly and accurately separated, making the packaging process smoother and more efficient.
+            </li>
+            <li>
+                <strong>Accessibility:</strong> Being a web-based tool, it's accessible from any device with a browser and internet connection, providing flexibility for your shipping operations whether you're in the office or on the go.
+            </li>
+        </ul>
+        <p>
+            Streamline your small business shipping today with this simple, efficient, and completely free tool!
+        </p>
+    </div>
+
+    <!-- jsPDF and html2canvas CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        /**
+         * Loads the remembered "From" address from localStorage on page load.
+         */
+        function loadRememberedAddress() {
+            const rememberedAddress = localStorage.getItem('fromAddress');
+            const rememberCheckbox = document.getElementById('rememberFrom');
+            const fromAddressField = document.getElementById('fromAddress'); // Get the single "From" field
+
+            if (rememberedAddress && fromAddressField) {
+                fromAddressField.value = rememberedAddress;
+                rememberCheckbox.checked = true; // Check the box if an address was loaded
+            }
+        }
+
+        /**
+         * Saves the single "From" address to localStorage if the "Remember" checkbox is checked.
+         */
+        function rememberFromAddress() {
+            const rememberCheckbox = document.getElementById('rememberFrom');
+            const fromAddressField = document.getElementById('fromAddress');
+
+            if (fromAddressField) { // Ensure the field exists
+                if (rememberCheckbox.checked) {
+                    localStorage.setItem('fromAddress', fromAddressField.value);
+                } else {
+                    localStorage.removeItem('fromAddress');
+                }
+            }
+        }
+
+        /**
+         * Generates shipping labels based on user input and displays them in the A4 sheet area.
+         */
+        function generateLabels() {
+            const labelsContainer = document.getElementById('labels-a4-sheet');
+            labelsContainer.innerHTML = ''; // Clear previous labels
+            labelsContainer.style.display = 'grid'; // Make the A4 sheet visible
+
+            let labelsGenerated = 0;
+            const commonFromAddress = document.getElementById('fromAddress')?.value.trim() || ''; // Get the single "From" address
+
+            // Loop through all 8 possible labels
+            for (let i = 1; i <= 8; i++) {
+                const toAddress = document.getElementById(`toAddress${i}`)?.value.trim() || '';
+
+                // Only generate a label if both the common From address and a specific To address exist
+                if (commonFromAddress && toAddress) {
+                    // Create the wrapper for the dashed cut line
+                    const labelCutLineWrapper = document.createElement('div');
+                    labelCutLineWrapper.className = 'label-cut-line-wrapper';
+
+                    // Create the inner label card with the solid border
+                    const labelCard = document.createElement('div');
+                    labelCard.className = 'label-card';
+
+                    // Use the common From Address
+                    labelCard.innerHTML = `
+                        <div class="label-content-row">
+                            <div class="label-section">
+                                <div class="label-header">FROM:</div>
+                                <div class="from-address whitespace-pre-wrap">${commonFromAddress}</div>
+                            </div>
+                            <div class="label-section">
+                                <div class="label-header">TO:</div>
+                                <div class="to-address whitespace-pre-wrap">${toAddress}</div>
+                            </div>
+                        </div>
+                    `;
+                    labelCutLineWrapper.appendChild(labelCard); // Append card to wrapper
+                    labelsContainer.appendChild(labelCutLineWrapper); // Append wrapper to container
+                    labelsGenerated++;
+                } else if (!commonFromAddress && toAddress) {
+                    console.warn(`Label ${i} has a 'To' address but no 'From' address. Skipping.`);
+                    // Alert only if 'To' is present but 'From' is missing for any label
+                    // This alert will not block the generation of other labels or the print/pdf functions.
+                    alert(`Warning: Label ${i} has a 'To' address but no 'From' address. It will not be generated.`);
+                }
+                // If only commonFromAddress is present and no toAddress, it's fine, we just don't generate that label.
+            }
+
+            if (labelsGenerated === 0) {
+                labelsContainer.style.display = 'none'; // Hide if no labels were generated
+                alert('No complete labels were entered. Please ensure you have a "From" address and at least one "To" address filled.');
+            }
+
+            // After generating labels, remember the single 'From' address if checkbox is checked
+            rememberFromAddress();
+        }
+
+        /**
+         * Triggers the browser's print dialog to print the A4 sheet area.
+         */
+        function printLabels() {
+            console.log('Print Labels button clicked.');
+            // Always generate labels first to ensure the latest input is reflected.
+            generateLabels(); // This will also handle alerts if no complete labels are found.
+
+            const labelsSheet = document.getElementById('labels-a4-sheet');
+            const actualLabels = labelsSheet.querySelectorAll('.label-cut-line-wrapper');
+
+            if (actualLabels.length > 0) {
+                console.log('Labels are generated and visible. Calling window.print().');
+                window.print();
+            } else {
+                console.log('No labels to print after generation. Print dialog will not open.');
+                // The alert would have already been shown by generateLabels() if needed.
+            }
+        }
+
+
+        /**
+         * Downloads the generated labels as a PDF.
+         */
+        async function downloadPdf() {
+            // Ensure labels are generated first if not already visible
+            generateLabels(); // Re-generate labels to ensure they are current and visible before capture
+
+            if (document.getElementById('labels-a4-sheet').innerHTML.trim() === '' || document.getElementById('labels-a4-sheet').style.display === 'none') {
+                alert("No labels were found to download. Please ensure you have entered complete 'From' and 'To' addresses for at least one label.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for millimeters, 'a4' for A4 size
+
+            // Define A4 dimensions and label layout in mm
+            const a4Width = 210;
+            const a4Height = 297;
+            const labelWidth = 85; /* Consistent width for the wrapper */
+            const labelHeight = 60; /* Consistent height for the wrapper */
+            const horizontalGap = 10; /* Consistent horizontal gap */
+            const verticalGap = 8; /* Adjusted vertical gap for 4 rows */
+            const padding = 15; // Consistent padding for A4 sheet
+
+            // Select the label wrappers, as they now contain the cut lines
+            const labelWrappers = document.querySelectorAll('#labels-a4-sheet .label-cut-line-wrapper');
+
+            // Show a loading indicator
+            const downloadButton = document.querySelector('button[onclick="downloadPdf()"]');
+            const originalButtonText = downloadButton.textContent;
+            downloadButton.textContent = 'Generating PDF...';
+            downloadButton.disabled = true;
+
+            try {
+                for (let i = 0; i < labelWrappers.length; i++) {
+                    // Add a new page if it's the 9th label, 17th label, etc.
+                    if (i > 0 && i % 8 === 0) {
+                        pdf.addPage();
+                    }
+
+                    const labelCard = labelWrappers[i]; // Correctly reference the wrapper for html2canvas
+
+                    // Calculate position on the current A4 page
+                    const col = i % 2; // 0 for left column, 1 for right column
+                    const row = Math.floor((i % 8) / 2);
+
+                    // Calculate X and Y coordinates with padding and gaps
+                    const x = padding + col * (labelWidth + horizontalGap);
+                    const y = padding + row * (labelHeight + verticalGap);
+
+                    // Generate canvas for each individual label wrapper (which includes the cut lines and solid label)
+                    const canvas = await html2canvas(labelCard, {
+                        scale: 2, // Increase scale for better resolution in PDF
+                        useCORS: true,
+                        backgroundColor: '#ffffff' // Ensure background is white
+                    });
+
+                    const imgData = canvas.toDataURL('image/png');
+
+                    // Add image to PDF at calculated position and size
+                    pdf.addImage(imgData, 'PNG', x, y, labelWidth, labelHeight);
+                }
+
+                pdf.save('shipping-labels.pdf');
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                alert("Failed to generate PDF. Please try again. Check console for details.");
+            } finally {
+                // Restore button state
+                downloadButton.textContent = originalButtonText;
+                downloadButton.disabled = false;
+            }
+        }
+
+        // Load remembered address and generate labels when the page loads
+        window.onload = function() {
+            loadRememberedAddress();
+            generateLabels(); // Automatically generate labels on page load
+        };
+    </script>
+</body>
+</html>
